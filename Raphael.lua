@@ -1,28 +1,30 @@
--- Raphael's Library v1.1.4
---		Last updated: 01/27/13 - -04:25
-
 --[[
- * Changelog v1.1.4
+ * Raphael's Library v1.2.0 beta
  *
- * - Renamed functions that overrode native methods and broke backwards compatibility; that
- * 		includes __getmessages(), __getnewmessages() and __getcreatures().
+ * Changelog
+ *
+ * - 'Namespaced' most functions as to eliminate conflicts between libraries.
+ * - Completely rewrote num and math.format.
+ * - Updated formattime and client.maround.
+ * - Added client.itemid, client.foreachtile and client.screencount.
  *
 --]]
 
 
 LIBS = LIBS or {}
-LIBS.RAPHAEL = '1.1.4'
+LIBS.RAPHAEL = '1.2.0'
 
 findcreature = getcreature
 tilewalkable = tileiswalkable
 table.unpack = table.unpack or unpack
 
 
---     _ ____        __     ______     __                  _
---    (_) __ )____  / /_   / ____/  __/ /____  ____  _____(_)___  ____
---   / / __  / __ \/ __/  / __/ | |/_/ __/ _ \/ __ \/ ___/ / __ \/ __ \
---  / / /_/ / /_/ / /_   / /____>  </ /_/  __/ / / (__  ) / /_/ / / / /
--- /_/_____/\____/\__/  /_____/_/|_|\__/\___/_/ /_/____/_/\____/_/ /_/
+--     __  __     __
+--    / / / /__  / /___  ___  __________
+--   / /_/ / _ \/ / __ \/ _ \/ ___/ ___/
+--  / __  /  __/ / /_/ /  __/ /  (__  )
+-- /_/ /_/\___/_/ .___/\___/_/  /____/
+--             /_/
 
 
 --[[
@@ -32,7 +34,7 @@ table.unpack = table.unpack or unpack
  * separated by the chosen decimal mark. Ex: 12,345,678
  *
  * @since 0.1.0
- * @updated 1.0.0
+ * @updated 1.2.0
  *
  * @param	{number}	n		- The number to be formatted
  * @param	{string}	[mark]	- The decimal mark to be used; defaults to ','
@@ -40,17 +42,9 @@ table.unpack = table.unpack or unpack
  * @returns	{string}			- Formatted number
 --]]
 function num(n, mark)
-	local sign, nl = ''
-	n = math.floor(n)
-	mark = (mark or ',') .. '%1'
-
-	if n < 0 then
-		sign = '-'
-		n = math.abs(n)
-	end
-
-	nl = (3 - (#tostring(n) % 3)) % 3
-	return sign .. (string.rep('0', nl) .. tostring(n)):gsub('(%d%d%d)', mark):sub(nl + 2)
+	mark = (mark or ',')
+	n = string.format('%.f', n) -- This allow for bigger numbers
+	return n:reverse():gsub('(...)', '%1' .. mark, math.ceil(#n / 3) - 1):reverse()
 end
 
 
@@ -61,6 +55,7 @@ end
  * string according to the pattern passed. Ex: 01:23:45
  *
  * @since 0.1.0
+ * @updated 1.2.0
  *
  * @param	{number}	secs		- The number of seconds the time represents
  * @param	{string}	[pattern]	- The pattern it sould be parsed on; defaults to the best
@@ -88,7 +83,7 @@ function formattime(secs, pattern)
 		pattern = pattern:lower()
 	end
 
-	return pattern:gsub('%l%l', function(s) return math.format(dt[s], '00') end)
+	return pattern:gsub('%l%l', function(s) return string.format('%02d', dt[s]) end)
 end
 
 
@@ -141,205 +136,6 @@ function exec(execstring)
 end
 
 
---[[
- * Calculates the experience needed from a level to another.
- *
- * NOTE: Do not confuse exptolvl() with exptolevel(). While the former is based on a hypothetical
- * scenario, where you would have just reached the starting level, the latter is based on your
- * character's current experience.
- *
- * @since 0.3.0
- *
- * @param	{number}	[l1]	- The starting level; defaults to 0
- * @param	{number}	l2		- The target level
- *
- * @returns {number}			- The experience needed
---]]
-function exptolvl(l1, l2)
-	l1 = l1 or level + 1
-	if l2 then
-		return exptolvl(l2) - exptolvl(l1)
-	else
-		return 50 / 3 * (l1 ^ 3 - 6 * l1 ^ 2 + 17 * l1 - 12)
-	end
-end
-
-
---[[
- * Calculates the experience your characters needs to achieve specified level.
- *
- * NOTE: Do not confuse exptolvl() with exptolevel(). While the former is based on a hypothetical
- * scenario, where you would have just reached the starting level, the latter is based on your
- * character's current experience.
- *
- * @overrides
- * @since 0.3
- *
- * @param	{number}	[lvl]	- The target level; defaults to level + 1
- *
- * @returns {number}			- The experience needed
---]]
-function exptolevel(lvl)
-	return exptolvl(lvl) - exp
-end
-
-
---[[
- * Returns the amount of items in a specified location.
- *
- * @overrides
- * @since 0.3.0
- * @updated 1.1.0
- *
- * @param	{number|string|table}	item		- The item(s) name or id.
- * @param	{number|string}			[origin]	- The location to look for; defaults to 'all'
- *
- * @returns {number}							- The amount of items
---]]
-function itemcount(item, origin)
-	origin = origin or 'all'
-	if type(item) ~= 'table' then
-		return _itemcount(item, origin)
-	else
-		return table.sum(table.each(item, function(v) return _itemcount(v, origin) end))
-	end
-end
-
-
---[[
- * Returns the amount of creatures that meet some specific criteria around you.
- *
- * @overrides
- * @since 0.3.0
- * @updated 1.0.0
- *
- * @param	{number}		[range]					- The range the creatures need to be around you; defaults to 7
- * @param	{boolean}		[samefloor]				- Only consider creatures on the same floor as you; defaults to true
- * @param	{string|table}	[name1], [name2], ...	- Names of the creatures that should be considered; defaults to any
- * @param	{function}		[f]						- A function to validate each creature; must return a boolean
- *
- * @returns {number}								- The amount of creatures
---]]
-function maround(...)
-	local fl, r = 'mf', 7
-	local f
-
-	if type(arg[1]) == 'number' then
-		r = table.remove(arg, 1)
-	end
-	if type(arg[1]) == 'boolean' then
-		if table.remove(arg, 1) then
-			fl = 'm'
-		end
-	end
-	if type(arg[#arg]) == 'function' then
-		f = table.remove(arg)
-	end
-	if type(arg[1]) == 'table' then
-		arg = arg[1]
-	end
-	table.lower(arg)
-
-	if not f then
-		return _maround(r, fl == 'm', table.concat(arg, ";") .. string.rep(';', math.min(#arg, 1)))
-	else
-		if r then
-			f = function(c)
-					return c.dist <= r and f(c)
-				end
-		end
-		if #arg > 0 then
-			f = function(c)
-					return table.find(c.name:lower(), arg) and f(c)
-				end
-		end
-		return #getcreatures(fl, f)
-	end
-end
-
-
---[[
- * Returns the pointers to the creatures that meet the specified criteria.
- *
- * @overrides
- * @since 0.3.0
- * @updated 1.1.4
- *
- * @param	{string}	[filter]	- A string containing the filters to be applied, where 'f' means same floor, 's'
- *									  means on the screen, 'm' means monster and 'p' means player; defaults to 'mpsf'
- * @param	{function}	[f]			- A function to validate each creature; must return a boolean
- *
- * @returns {table}					- The pointers to the creatures
---]]
-function __getcreatures(...)
-	local fl = 'mpsf'
-	local cre = {}
-
-	if type(arg[1]) == 'string' then
-		fl = table.remove(arg, 1)
-	end
-
-	do
-		local tcre = _getcreatures(fl)
-		for i = 0, tcre.count - 1 do
-			table.insert(cre, tcre[i])
-		end
-	end
-
-	if type(arg[1]) == 'function' then
-		table.filter(cre, arg[1])
-	end
-	return cre
-end
-
-
---[[
- * Returns the pointers to the messages sent on specified channel.
- *
- * @overrides
- * @since 1.1.2
- * @updated 1.1.4
- *
- * @param	{string}	[channel]	- Client channel to pull messages from; defaults to all
- *
- * @returns {table}					- The pointers to the messages
---]]
-function __getmessages(channel)
-	local msgs = {}
-	do
-		local tmsgs = getmessages(channel)
-		for i = 0, tmsgs.count - 1 do
-			table.insert(msgs, tmsgs[i])
-		end
-	end
-
-	return msgs
-end
-
-
---[[
- * Returns the pointers to the new messages sent on specified channel.
- *
- * @overrides
- * @since 1.1.2
- * @updated 1.1.4
- *
- * @param	{string}	[channel]	- Client channel to pull messages from; defaults to all
- *
- * @returns {table}					- The pointers to the messages
---]]
-function __getnewmessages(channel)
-	local msgs = {}
-	do
-		local tmsgs = getnewmessages(channel)
-		for i = 0, tmsgs.count - 1 do
-			table.insert(msgs, tmsgs[i])
-		end
-	end
-
-	return msgs
-end
-
 
 local trueValues = {'yes', 'on', 1, true}
 --[[
@@ -379,7 +175,7 @@ end
  *
  * @returns {number}		- The equivalent 'on' or 'off' value
 --]]
-function toonezero(val)
+function _r.toonezero(val)
 	return (table.find(trueValues, val) and 1) or 0
 end
 
@@ -408,7 +204,7 @@ end
  *
  * @returns {string}			- The converted path
 --]]
-local function getfullpath(path)
+function getfullpath(path)
 	return path:gsub('/', '\\'):begin('Settings\\')
 end
 
@@ -457,6 +253,7 @@ end
  * decimal mark.
  *
  * @since 0.1.0
+ * @updated 1.2.0
  *
  * @param	{number}	self	- The number to be formatted
  * @param	{string}	pattern	- The pattern in which the number should be formatted; e.g: '00.00'
@@ -464,22 +261,16 @@ end
  * @returns	{string}			- The formatted number
 --]]
 function math.format(self, pattern)
-	local s, p
-	s = string.explode('0' .. tostring(self), '%.')
-	p = string.explode('0' .. pattern       , '%.')
+	local p = table.each(pattern:explode('%.'), function(v) return #v end)
+	local s = tostring(self):explode('%.')
+	table.insert(s, 0)
 
-	s[1] = s[1]:sub(2) -- Removes the extra zero
-	p[1] = p[1]:sub(2) -- Removes the extra zero
-
-	s[1] = ('0'):rep(#p[1] - #s[1]) .. s[1] -- Adds padding 0 before the dot
-
-	if p[2] then -- Adds padding 0 after the dot
-		s[2] = s[2] or ''
-		s[2] = '.' .. (s[2] .. ('0'):rep(#p[2] - #s[2])):sub(#p[2])
+	s[1] = string.format('%0' .. p[1] .. 'd', s[1])
+	if p[2] then
+		s[2] = '.' .. string.format('%-' .. p[2] .. 'd', s[2]):sub(0, p[2]):gsub(' ', 0)
 	else
 		s[2] = ''
 	end
-
 	return s[1] .. s[2]
 end
 
@@ -761,7 +552,7 @@ end
  * @returns {table}					- A table with the equivalent item ids
 --]]
 function table.id(self)
-	return table.each(self, itemid)
+	return table.each(self, client.itemid)
 end
 
 
@@ -1165,4 +956,310 @@ function file.exec(filename)
 		return dofile(filename)
 	end
 	return nil
+end
+
+
+
+--    _________            __     __  __     __
+--   / ____/ (_)__  ____  / /_   / / / /__  / /___  ___  __________
+--  / /   / / / _ \/ __ \/ __/  / /_/ / _ \/ / __ \/ _ \/ ___/ ___/
+-- / /___/ / /  __/ / / / /_   / __  /  __/ / /_/ /  __/ /  (__  )
+-- \____/_/_/\___/_/ /_/\__/  /_/ /_/\___/_/ .___/\___/_/  /____/
+--                                        /_/
+
+client = {}
+
+
+--[[
+ * Calculates the experience needed from a level to another.
+ *
+ * NOTE: Do not confuse exptolvl() with exptolevel(). While the former is based on a hypothetical
+ * scenario, where you would have just reached the starting level, the latter is based on your
+ * character's current experience.
+ *
+ * @since 0.3.0
+ *
+ * @param	{number}	[l1]	- The starting level; defaults to 0
+ * @param	{number}	l2		- The target level
+ *
+ * @returns {number}			- The experience needed
+--]]
+function client.exptolvl(l1, l2)
+	l1 = l1 or level + 1
+	if l2 then
+		return exptolvl(l2) - exptolvl(l1)
+	else
+		return 50 / 3 * (l1 ^ 3 - 6 * l1 ^ 2 + 17 * l1 - 12)
+	end
+end
+
+
+--[[
+ * Calculates the experience your characters needs to achieve specified level.
+ *
+ * NOTE: Do not confuse exptolvl() with exptolevel(). While the former is based on a hypothetical
+ * scenario, where you would have just reached the starting level, the latter is based on your
+ * character's current experience.
+ *
+ * @since 0.3
+ *
+ * @param	{number}	[lvl]	- The target level; defaults to level + 1
+ *
+ * @returns {number}			- The experience needed
+--]]
+function client.exptolevel(lvl)
+	return exptolvl(lvl) - exp
+end
+
+
+--[[
+ * Returns the amount of items in a specified location.
+ *
+ * @since 0.3.0
+ * @updated 1.1.0
+ *
+ * @param	{number|string|table}	item		- The item(s) name or id.
+ * @param	{number|string}			[origin]	- The location to look for; defaults to 'all'
+ *
+ * @returns {number}							- The amount of items
+--]]
+function client.itemcount(item, origin)
+	origin = origin or 'all'
+	if type(item) ~= 'table' then
+		return _itemcount(item, origin)
+	else
+		return table.sum(table.each(item, function(v) return _itemcount(v, origin) end))
+	end
+end
+
+
+--[[
+ * Returns the amount of creatures that meet some specific criteria around you.
+ *
+ * @since 0.3.0
+ * @updated 1.2.0
+ *
+ * @param	{number}		[range]					- The range the creatures need to be around you; defaults to 7
+ * @param	{boolean}		[samefloor]				- Only consider creatures on the same floor as you; defaults to true
+ * @param	{string|table}	[name1], [name2], ...	- Names of the creatures that should be considered; defaults to any
+ * @param	{function}		[f]						- A function to validate each creature; must return a boolean
+ *
+ * @returns {number}								- The amount of creatures
+--]]
+function client.maround(...)
+	local fl, r = 'mf', 7
+	local f
+
+	if type(arg[1]) == 'number' then
+		r = table.remove(arg, 1)
+	end
+	if type(arg[1]) == 'boolean' then
+		if table.remove(arg, 1) then
+			fl = 'm'
+		end
+	end
+	if type(arg[#arg]) == 'function' then
+		f = table.remove(arg)
+	end
+	if type(arg[1]) == 'table' then
+		arg = arg[1]
+	end
+	table.lower(arg)
+
+	if not f then
+		return _maround(r, fl == 'm', table.concat(arg, ";") .. string.rep(';', math.min(#arg, 1)))
+	else
+		if r then
+			f = function(c)
+					return c.dist <= r and f(c)
+				end
+		end
+		if #arg > 0 then
+			f = function(c)
+					return table.find(c.name:lower(), arg) and f(c)
+				end
+		end
+		return #client.getcreatures(fl, f)
+	end
+end
+
+
+--[[
+ * Returns the pointers to the creatures that meet the specified criteria.
+ *
+ * @since 0.3.0
+ * @updated 1.1.4
+ *
+ * @param	{string}	[filter]	- A string containing the filters to be applied, where 'f' means same floor, 's'
+ *									  means on the screen, 'm' means monster and 'p' means player; defaults to 'mpsf'
+ * @param	{function}	[f]			- A function to validate each creature; must return a boolean
+ *
+ * @returns {table}					- The pointers to the creatures
+--]]
+function client.getcreatures(...)
+	local fl = 'mpsf'
+	local cre = {}
+
+	if type(arg[1]) == 'string' then
+		fl = table.remove(arg, 1)
+	end
+
+	do
+		local tcre = _getcreatures(fl)
+		for i = 0, tcre.count - 1 do
+			table.insert(cre, tcre[i])
+		end
+	end
+
+	if type(arg[1]) == 'function' then
+		table.filter(cre, arg[1])
+	end
+	return cre
+end
+
+
+--[[
+ * Returns the pointers to the messages sent on specified channel.
+ *
+ * @since 1.1.2
+ * @updated 1.1.4
+ *
+ * @param	{string}	[channel]	- Client channel to pull messages from; defaults to all
+ *
+ * @returns {table}					- The pointers to the messages
+--]]
+function client.getmessages(channel)
+	local msgs = {}
+	do
+		local tmsgs = getmessages(channel)
+		for i = 0, tmsgs.count - 1 do
+			table.insert(msgs, tmsgs[i])
+		end
+	end
+
+	return msgs
+end
+
+
+--[[
+ * Returns the pointers to the new messages sent on specified channel.
+ *
+ * @since 1.1.2
+ * @updated 1.1.4
+ *
+ * @param	{string}	[channel]	- Client channel to pull messages from; defaults to all
+ *
+ * @returns {table}					- The pointers to the messages
+--]]
+function client.getnewmessages(channel)
+	local msgs = {}
+	do
+		local tmsgs = getnewmessages(channel)
+		for i = 0, tmsgs.count - 1 do
+			table.insert(msgs, tmsgs[i])
+		end
+	end
+
+	return msgs
+end
+
+
+--[[
+ * Returns the id of given item.
+ *
+ * @since 1.2.0
+ *
+ * @param	{string|number}	id		- Item to get the id of
+ *
+ * @returns {number}				- Item id
+--]]
+function client.itemid(id)
+	if type(id) == 'string' then
+		return itemid(id)
+	else
+		return id
+	end
+end
+
+
+--[[
+ * Returns a tile object given its coordinates.
+ *
+ * @since 1.2.0
+ *
+ * @param	{number}	x	- Tile X coordinate
+ * @param	{number}	y	- Tile Y coordinate
+ * @param	{number}	z	- Tile Z coordinate
+ *
+ * @returns {number}		- The tile on the specified location
+--]]
+function client.gettile(x, y, z)
+	local tile = {x = x, y = y, z = z, items = {}}
+	local tTile = gettile(x, y, z)
+
+	for i = 1, tTile.count - 1 do
+		table.insert(tile.items, tTile.items[i])
+	end
+
+	return tile
+end
+
+
+--[[
+ * Runs a routine on every tile on a specified range of your character
+ *
+ * @since 1.2.0
+ *
+ * @param	{function}	f		- Routine to be ran on each tile
+ * @param	{number}	[x]		- X range; defaults to 7
+ * @param	{number}	[y]		- Y range; defaults to 5
+--]]
+function client.foreachtile(f, xRange, yRange)
+	xRange = xRange or 7
+	yRange = yRange or 5
+	for x = -xRange, xRange do
+		for y = -yRange, yRange do
+			f(client.gettile(posx + x, posy + y, posz))
+		end
+	end
+end
+
+
+--[[
+ * Counts the occurences/amount of specified item(s) on the screen.
+ *
+ * @since 1.2.0
+ *
+ * @param	{number|string|table}	id		- Item(s) name/id
+ * @param	{number}				[deep]	- Whether it should look deeper into the item stack; defaults to false
+ * @param	{number}				[real]	- Whether it should count amount instead of occurence; defaults to false
+ *
+ * @returns {number}						- Counted occurences/amount
+--]]
+function client.screencount(id, deep, real)
+	if (type(id) ~= 'table') then
+		id = {id}
+	end
+	id = table.id(id)
+	deep = deep or false
+	real = real or false
+
+	local c = 0
+	local f = function(t)
+		for i = #t.items - 1, 1 do
+			if table.find(id, t.items[i].id) then
+				if real then
+					c = c + math.max(t.items[i].count, 1)
+				else
+					c = c + 1
+				end
+				if not deep then
+					return
+				end
+			end
+		end
+	end
+
+	client.foreachtile(f)
+	return c
 end
