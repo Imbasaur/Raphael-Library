@@ -175,7 +175,7 @@ end
  *
  * @returns {number}		- The equivalent 'on' or 'off' value
 --]]
-function _r.toonezero(val)
+function toonezero(val)
 	return (table.find(trueValues, val) and 1) or 0
 end
 
