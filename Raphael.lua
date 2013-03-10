@@ -1,5 +1,5 @@
 --[[
- * Raphael's Library v1.2.0 beta
+ * Raphael's Library v1.2.0 beta 2
  *
  * Changelog
  *
@@ -1194,11 +1194,13 @@ end
  * @returns {number}		- The tile on the specified location
 --]]
 function client.gettile(x, y, z)
-	local tile = {x = x, y = y, z = z, items = {}}
-	local tTile = gettile(x, y, z)
+	local tile = {x = x, y = y, z = z, items = {}, obj = gettile(x, y, z)}
 
-	for i = 1, tTile.count - 1 do
-		table.insert(tile.items, tTile.items[i])
+	for i = 1, tile.obj.count - 1 do
+		local item = tile.obj.items[i]
+		if item.id ~= 99 then -- Not a player
+			table.insert(tile.items, tile.obj.items[i])
+		end
 	end
 
 	return tile
@@ -1226,6 +1228,40 @@ end
 
 
 --[[
+ * Finds the occurences of specified item(s) on the screen.
+ *
+ * @since 1.2.0
+ *
+ * @param	{number|string|table}	id		- Item(s) name/id
+ * @param	{number}				[deep]	- Whether it should look deeper into the item stack; defaults to false
+ *
+ * @returns {table}							- All tiles in which the items were found
+--]]
+function client.screenfind(id, deep)
+	if (type(id) ~= 'table') then
+		id = {id}
+	end
+	id = table.id(id)
+	deep = deep or false
+
+	local r = {}
+	local f = function(t)
+		for _, v in ipairs(t.items) do
+			if table.find(id, v.id) then
+				table.insert(r, t)
+				return
+			end
+			if not deep then
+				return
+			end
+		end
+	end
+
+	client.foreachtile(f)
+	return r
+end
+
+--[[
  * Counts the occurences/amount of specified item(s) on the screen.
  *
  * @since 1.2.0
@@ -1237,29 +1273,27 @@ end
  * @returns {number}						- Counted occurences/amount
 --]]
 function client.screencount(id, deep, real)
-	if (type(id) ~= 'table') then
-		id = {id}
-	end
-	id = table.id(id)
 	deep = deep or false
 	real = real or false
 
-	local c = 0
-	local f = function(t)
-		for i = #t.items - 1, 1 do
-			if table.find(id, t.items[i].id) then
+	local tiles = client.screenfind(id, deep)
+	if not (deep or real) then
+		return #tiles
+	else
+		local c = 0
+		for _, v in ipairs(tiles) do
+			for _, i in ipairs(v.items) do
 				if real then
-					c = c + math.max(t.items[i].count, 1)
+					c = c + math.max(i.count, 1)
 				else
 					c = c + 1
 				end
 				if not deep then
-					return
+					break
 				end
 			end
 		end
-	end
 
-	client.foreachtile(f)
-	return c
+		return c
+	end
 end
