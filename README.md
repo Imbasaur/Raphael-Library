@@ -1,3 +1,6 @@
+**Warning! This iBot library is deprecated and no longer being updated. Please do yourself some good and move to WindBot.**
+
+
 Raphael's Library
 =================
 
